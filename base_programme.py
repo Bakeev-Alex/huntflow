@@ -1,4 +1,5 @@
 from pathlib import Path
+from pprint import pprint
 
 import json
 import openpyxl
@@ -29,10 +30,10 @@ class ParsData:
 
     # Авторизационный токен
     # __token = input("Enter the user token: ")
-    __token = ""
+    __token = "71e89e8af02206575b3b4ae80bf35b6386fe3085af3d4085cbc7b43505084482"
 
     # Путь к файлу
-    path_in_file = r"C:\Users\Coffee\Desktop\Тестовое задание\Frontend-разработчик\Танский Михаил.pdf"
+    path_in_file = r"C:\Users\Coffee\Desktop\Тестовое задание\Менеджер по продажам\Корниенко Максим.do"
     # path_in_file = input("Enter the path to the file: ")
 
     # Путь к базе данных .xlsx
@@ -45,7 +46,7 @@ class ParsData:
 
     def handle(self):
         # self.getting_data_in_xlsx()
-        self.sending_file()
+        self.sending_file(self.path_in_file)
 
     def getting_data_in_xlsx(self):
         # FIXME: Обработать ошибки с неправильным путем!
@@ -78,7 +79,7 @@ class ParsData:
         """
         Получение пути файла
         :param name_file: Название файла
-        :return: путь к файлу к заданной папке
+        :return: путь к файлу
         """
 
         resume_file = Path(self.__path_in_file_resume)
@@ -95,26 +96,37 @@ class ParsData:
 
         return self.path_file
 
-    def sending_file(self):
-        # todo:
+    def sending_file(self, path_in_file):
+        # todo: Обращаться сюда из поиска путей файлов
         url = "https://dev-100-api.huntflow.dev/account/2/upload"
         # url = "http://httpbin.org/post"
+        # FIXME: Вынести в base_header и добавлять в него необходимые ключи
         header = {
             "User-Agent": "App/1.0 test@huntflow.ru",
             "X-File-Parse": "true",
             "Authorization": "Bearer %s" % self.__token,
         }
+
         # FIXME: при парсенге, нужно будет формировать путь, чтобы отправить
-        path_file = Path(self.path_in_file)
-        with open(path_file, 'rb') as file_full:
-            files_test = {'file': ("test.doc", file_full, "application/pdf")}
-            # files_test = {'file': file_full}
-            try:
-                result = requests.post(url, headers=header, files=files_test, timeout=60)
-            except requests.exceptions.Timeout:
-                logging.error("Waiting time exceeded")
-            print(result.status_code)
-            print(json.dumps(result.text, indent=4, ensure_ascii=False).encode('utf-8'))
+        path_file = Path(path_in_file)
+
+        try:
+            success = True
+            with open(path_file, 'rb') as file_full:
+                files_test = {'file': ("test.doc", file_full, "application/octet-stream")}
+                try:
+                    resp = requests.post(url, headers=header, files=files_test, timeout=60)
+                except requests.exceptions.Timeout:
+                    logging.error("Waiting time exceeded in requests")
+                    success = False
+        except FileNotFoundError:
+            success = False
+            logging.error("There is no file to send or the file path is specified incorrectly. File: Имя файла из json")
+
+        if success:
+            data_resume = json.dumps(resp.json(), indent=4, ensure_ascii=False)
+        else:
+            print('Add logs')
 
 
 if __name__ == '__main__':
