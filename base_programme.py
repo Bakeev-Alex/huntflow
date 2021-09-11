@@ -19,6 +19,16 @@ logging.basicConfig(filename="logs/send_resume.txt",
     Получение данных от пользователя, токена и путь к базе .xlsx
 """
 
+# Авторизационный токен
+# __token = input("Enter the user token: ")
+__token = ""
+
+# Заголовк для отправки запросов
+header = {
+    "User-Agent": "App/1.0 test@huntflow.ru",
+    "Authorization": "Bearer %s" % __token,
+}
+
 
 class ParsData:
     """
@@ -28,12 +38,10 @@ class ParsData:
     # todo: продумать куда записывать отправленых кандидатов, либо база или что-то подобное.
     print(__doc__)
 
-    # Авторизационный токен
-    # __token = input("Enter the user token: ")
-    __token = "71e89e8af02206575b3b4ae80bf35b6386fe3085af3d4085cbc7b43505084482"
+    base_url = "https://dev-100-api.huntflow.dev"
 
     # Путь к файлу
-    path_in_file = r"C:\Users\Coffee\Desktop\Тестовое задание\Менеджер по продажам\Корниенко Максим.do"
+    path_in_file = r"C:\Users\Coffee\Desktop\Тестовое задание\Менеджер по продажам\Корниенко Максим.doc"
     # path_in_file = input("Enter the path to the file: ")
 
     # Путь к базе данных .xlsx
@@ -41,35 +49,55 @@ class ParsData:
 
     # Путь к папке с резюме
     __path_in_file_resume = r"C:\Users\Coffee\Desktop\Тестовое задание"
+
     data = []
     path_file = ''
 
     def handle(self):
-        # self.getting_data_in_xlsx()
-        self.sending_file(self.path_in_file)
+        self.getting_data()
+        # self.sending_file(self.path_in_file)
 
-    def getting_data_in_xlsx(self):
+    def getting_data(self):
         # FIXME: Обработать ошибки с неправильным путем!
+        # FIXME: проверить нужно ли закрыть соединение к документу
         xlsx_file = Path(self.__path_in_file_db)
         wb_obj = openpyxl.load_workbook(xlsx_file)
         sheet = wb_obj.active
 
         for row in range(2, sheet.max_row + 1):
-            position = sheet[row][0].value
+            position_desire = sheet[row][0].value
             full_name = sheet[row][1].value
             wages = sheet[row][2].value
             comment = sheet[row][3].value
             status = sheet[row][4].value
+
             path_file = self.getting_file_resume(full_name.strip())
 
+            result_pars_file = self.sending_file(path_file)
+            fields_file = result_pars_file.get("fields", {})
+            phone = fields_file.get("phones", [])[0]
+            # print(result_pars_file)
+
             self.data.append({
-                "position": position,
-                "full_name": full_name,
-                "wages": wages,
-                "comment": comment,
-                "status": status,
-                "path_file": path_file
+                # Данные из файла excel
+                "position_desire": position_desire, # Желаемая должность
+                "full_name": full_name, # Полное имя
+                "wages": wages, # Ожидаемая з/п
+                "comment": comment, # Комментарий
+                "status": status, # Статус
+                "path_file": path_file, # Путь к резюме (убрать)
+
+                # Данные из парсинга резюме
+                "id_resume_file": result_pars_file.get("id", {}),
+                "name": fields_file.get("name", {}),
+                "birth_date": fields_file.get("birthdate", {}),
+                "body": result_pars_file.get("text", ""),
+                "phones": phone,
+                "email": fields_file.get("email", ""),
+                "position_now": fields_file.get("position", ""),
+                "photo_id": result_pars_file.get("position", {}).get("id", None),
             })
+        wb_obj.close()
         # FIXME: вместо этого вывести ФИО
         print(json.dumps(self.data, indent=4, ensure_ascii=False))
         return self.data
@@ -98,22 +126,20 @@ class ParsData:
 
     def sending_file(self, path_in_file):
         # todo: Обращаться сюда из поиска путей файлов
-        url = "https://dev-100-api.huntflow.dev/account/2/upload"
-        # url = "http://httpbin.org/post"
-        # FIXME: Вынести в base_header и добавлять в него необходимые ключи
-        header = {
-            "User-Agent": "App/1.0 test@huntflow.ru",
-            "X-File-Parse": "true",
-            "Authorization": "Bearer %s" % self.__token,
-        }
-
-        # FIXME: при парсенге, нужно будет формировать путь, чтобы отправить
+        url = "%s/account/2/upload" % self.base_url
         path_file = Path(path_in_file)
 
+        data_resume = connect(url, path_file, sending_method="POST")
+        return data_resume
+
+
+def connect(url, path_file, sending_method="GET"):
+    if sending_method == "POST":
         try:
             success = True
             with open(path_file, 'rb') as file_full:
-                files_test = {'file': ("test.doc", file_full, "application/octet-stream")}
+                files_test = {'file': ("document_file", file_full, "application/octet-stream")}
+                header["X-File-Parse"] = "true"
                 try:
                     resp = requests.post(url, headers=header, files=files_test, timeout=60)
                 except requests.exceptions.Timeout:
@@ -121,12 +147,18 @@ class ParsData:
                     success = False
         except FileNotFoundError:
             success = False
-            logging.error("There is no file to send or the file path is specified incorrectly. File: Имя файла из json")
+            logging.error("There is no file to send or the file path is specified incorrectly. File: %s" % path_file)
 
         if success:
-            data_resume = json.dumps(resp.json(), indent=4, ensure_ascii=False)
+            data_resume = resp.json()
         else:
+            data_resume = {}
             print('Add logs')
+
+        return data_resume
+
+    else:
+        resp = requests.get(url)
 
 
 if __name__ == '__main__':
