@@ -6,6 +6,7 @@ import json
 import openpyxl
 import os
 import requests
+import sys
 
 mb = 15 * 1048576
 
@@ -53,13 +54,50 @@ class ParsData:
     data = []
     path_file = ''
 
+    def __init__(self):
+        self.account_id = self.getting_account_id()
+
     def handle(self):
-        # self.getting_data()
-        self.sending_file(self.path_in_file)
+        self.getting_data()
+        # self.sending_file(self.path_in_file)
+        # self.getting_vacancies()
 
     def getting_account_id(self):
-        url = "%s/accounts"
-        pass
+
+        """
+            Получение данных об организации
+        """
+
+        # FIXME: Поменять все русское на англ
+        url = "%s/accounts" % self.base_url
+        data = connect(url, sending_method='GET')
+        available_org = []
+        if data:
+            message = 'Необходимо ввести id организации. \n' \
+                      'Доступные организации этому токену: \n '
+            for key, value in data.items():
+                for organization in value:
+                    organization = dict(organization)
+                    org_id = organization.get('id', '')
+                    org_name = organization.get('name', '')
+                    message += f'"{org_name}": {org_id} \n'
+                    available_org.append(org_id)
+            print(message)
+
+            while available_org:
+                try:
+                    input_org_id = int(input("Введите id организацию: "))
+                    if input_org_id in available_org:
+                        # self.account_id = input_org_id
+                        return input_org_id
+                    else:
+                        print("Такой организации нет в списке, попробуйте еще раз. \n")
+                        continue
+                except ValueError:
+                    print('Вы ввели не число, попробуйте еще раз. \n')
+                    continue
+        else:
+            raise SystemExit("Нет доступных организайций")
 
     def getting_data(self):
 
@@ -73,6 +111,7 @@ class ParsData:
             sheet = wb_obj.active
 
             for row in range(2, sheet.max_row + 1):
+                # Данные из базы данных excel
                 position_desire = sheet[row][0].value
                 full_name = sheet[row][1].value
                 wages = sheet[row][2].value
@@ -81,9 +120,13 @@ class ParsData:
 
                 path_file = self.getting_file_resume(full_name.strip())
 
+                # Данные из парсинга
                 result_pars_file = self.sending_file(path_file)
                 fields_file = result_pars_file.get("fields", {})
-                phone = fields_file.get("phones", [])[0]
+                phone = str(fields_file.get("phones", []))
+
+                # Получение id вакансий
+                vacancies = self.getting_vacancies()
 
                 self.data.append({
                     # Данные из файла excel
@@ -102,6 +145,9 @@ class ParsData:
                     "email": fields_file.get("email", ""),
                     "position_now": fields_file.get("position", ""),
                     "photo_id": result_pars_file.get("position", {}).get("id", None),
+
+                    # id вакансии
+                    "vacancies": vacancies[position_desire]
                 })
             wb_obj.close()
         except openpyxl.utils.exceptions.InvalidFileException:
@@ -138,14 +184,28 @@ class ParsData:
             Возвращает данные после парсинга на сервесе huntflow через api
         """
 
-        url = "%s/account/2/upload" % self.base_url
+        url = "%s/account/%s/upload" % (self.base_url, self.account_id)
         path_file = Path(path_in_file)
 
         data_resume = connect(url, path_file, sending_method="POST")
         return data_resume
 
+    def getting_vacancies(self):
+        url = '%s/account/%s/vacancies' % (self.base_url, self.account_id)
+        all_vacancies = {}
 
-def connect(url, path_file, sending_method="GET"):
+        # Получение только активных вакансий
+        vacancies = connect(url, param=str(dict(opened="true")), sending_method="GET")
+        for vac_list in vacancies.get("items", {}):
+            vac_id = vac_list.get("id", "")
+            vac_name = vac_list.get("position", "")
+            if vac_name:
+                all_vacancies[vac_name] = vac_id
+
+        return all_vacancies
+
+
+def connect(url, path_file=None, param="", sending_method=""):
 
     """
         Выполнение HTTP запросов, для получения и заполнения данных
@@ -154,8 +214,9 @@ def connect(url, path_file, sending_method="GET"):
     resp = {}
     if sending_method == "POST":
         try:
+            # FIXME: Проверить с установленным None
             with open(path_file, 'rb') as file_full:
-                files_test = {'file': ("document_file", file_full, "application/octet-strea")}
+                files_test = {'file': ("document_file", file_full, "application/octet-stream")}
                 header["X-File-Parse"] = "true"
                 try:
                     resp = requests.post(url, headers=header, files=files_test, timeout=60)
@@ -167,7 +228,7 @@ def connect(url, path_file, sending_method="GET"):
 
     elif sending_method == "GET":
         try:
-            resp = requests.get(url, headers=header, timeout=60)
+            resp = requests.get(url, headers=header, params=param, timeout=60)
             success = checking_status(resp.status_code, resp.text)
         except requests.exceptions.Timeout:
             logger.error("Waiting time exceeded in request post")
