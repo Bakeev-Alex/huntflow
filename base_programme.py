@@ -19,7 +19,7 @@ logger = log_entry("base")
 
 # Авторизационный токен
 # __token = input("Enter the user token: ")
-__token = ""
+__token = "71e89e8af02206575b3b4ae80bf35b6386fe3085af3d4085cbc7b43505084482"
 
 # Заголовк для отправки запросов
 header = {
@@ -51,16 +51,17 @@ class ParsData:
     # __path_in_file_resume = r"C:\Users\Coffee\Desktop\Тестовое задание"
     __path_in_file_resume = r"/home/alex/Загрузки/Тестовое задание"
 
-    data = []
     path_file = ''
 
     def __init__(self):
         self.account_id = self.getting_account_id()
+        self.generated_data = self.getting_data()
 
     def handle(self):
-        self.getting_data()
+        # self.getting_data()
         # self.sending_file(self.path_in_file)
         # self.getting_vacancies()
+        self.adding_candidate()
 
     def getting_account_id(self):
 
@@ -106,6 +107,7 @@ class ParsData:
         """
 
         xlsx_file = Path(self.__path_in_file_db)
+        data = []
         try:
             wb_obj = openpyxl.load_workbook(xlsx_file)
             sheet = wb_obj.active
@@ -128,7 +130,8 @@ class ParsData:
                 # Получение id вакансий
                 vacancies = self.getting_vacancies()
 
-                self.data.append({
+                # FIXME: убрать в локальную переменную data и просто отправлять в return
+                data.append({
                     # Данные из файла excel
                     "position_desire": position_desire, # Желаемая должность
                     "full_name": full_name, # Полное имя
@@ -137,6 +140,7 @@ class ParsData:
                     "status": status, # Статус
 
                     # Данные из парсинга резюме
+                    # FIXME: Добавить описание полей
                     "id_resume_file": result_pars_file.get("id", {}),
                     "name": fields_file.get("name", {}),
                     "birth_date": fields_file.get("birthdate", {}),
@@ -144,7 +148,7 @@ class ParsData:
                     "phones": phone,
                     "email": fields_file.get("email", ""),
                     "position_now": fields_file.get("position", ""),
-                    "photo_id": result_pars_file.get("position", {}).get("id", None),
+                    "photo_id": result_pars_file.get("photo", {}).get("id", None),
 
                     # id вакансии
                     "vacancies": vacancies[position_desire]
@@ -152,9 +156,8 @@ class ParsData:
             wb_obj.close()
         except openpyxl.utils.exceptions.InvalidFileException:
             logger.error("Incorrect path or name of the db file")
-
-        print(json.dumps(self.data, indent=4, ensure_ascii=False))
-        return self.data
+        # print(json.dumps(data, indent=4, ensure_ascii=False))
+        return data
 
     def getting_file_resume(self, name_file):
 
@@ -187,7 +190,7 @@ class ParsData:
         url = "%s/account/%s/upload" % (self.base_url, self.account_id)
         path_file = Path(path_in_file)
 
-        data_resume = connect(url, path_file, sending_method="POST")
+        data_resume = connect(url, path_file, sending_method="FILE_POST")
         return data_resume
 
     def getting_vacancies(self):
@@ -195,7 +198,7 @@ class ParsData:
         all_vacancies = {}
 
         # Получение только активных вакансий
-        vacancies = connect(url, param=str(dict(opened="true")), sending_method="GET")
+        vacancies = connect(url, param=dict(opened="true"), sending_method="GET")
         for vac_list in vacancies.get("items", {}):
             vac_id = vac_list.get("id", "")
             vac_name = vac_list.get("position", "")
@@ -204,15 +207,70 @@ class ParsData:
 
         return all_vacancies
 
+    def adding_candidate(self):
 
-def connect(url, path_file=None, param="", sending_method=""):
+        """
+            Добавление кандидата в базу
+        """
+
+        url = "%s/account/%s/applicants" % (self.base_url, self.account_id)
+        for candidate_data in self.generated_data:
+            full_name = candidate_data.get("name", {})
+            birth_date = candidate_data.get("birth_date", {})
+            data = {
+                "last_name": full_name.get("last", ""),
+                "first_name": full_name.get("first", ""),
+                "middle_name": full_name.get("middle", ""),
+                "phone": candidate_data.get("phones", ""),
+                "email": candidate_data.get("email", ""),
+                "position": candidate_data.get("position_now", ""),
+                "company": "",
+                "money": candidate_data.get("wages", ""),
+                "birthday_day": birth_date.get("day", ""),
+                "birthday_month": birth_date.get("month", ""),
+                "birthday_year": birth_date.get("year", ""),
+                "photo": candidate_data.get("photo_id", ""),
+                "externals": [
+                    {
+                        "data": {
+                            "body": candidate_data.get("body", ""),
+                        },
+                        "auth_type": "",
+                        "files": [
+                            {
+                                "id": candidate_data.get("id_resume_file", "")
+                            }
+                        ],
+                        "account_source": ""
+                    }
+                ],
+            }
+            print(data)
+
+        # resp = connect(url, data=data, sending_method="POST")
+        # print(json.dumps(data, indent=4, ensure_ascii=False))
+
+    def adding_candidate_on_vacancy(self):
+        # FIXME: скорее всего ее вызывать из adding_candidate,
+        #  потому что буду получать id кандидата и сразу привязывать ее к вакансии,
+        #  передавать сюда нужные данные
+        """
+            Добавление кандидата на вакансию
+        """
+
+        # print('adding_candidate_on_vacancy', self.generated_data)
+        pass
+
+
+def connect(url, path_file=None, data=None, param=None, sending_method=None):
 
     """
         Выполнение HTTP запросов, для получения и заполнения данных
     """
+    # FIXME: Сделать из timeout декаратор
     success = False
     resp = {}
-    if sending_method == "POST":
+    if sending_method == "FILE_POST":
         try:
             # FIXME: Проверить с установленным None
             with open(path_file, 'rb') as file_full:
@@ -230,6 +288,15 @@ def connect(url, path_file=None, param="", sending_method=""):
         try:
             resp = requests.get(url, headers=header, params=param, timeout=60)
             success = checking_status(resp.status_code, resp.text)
+        except requests.exceptions.Timeout:
+            logger.error("Waiting time exceeded in request post")
+
+    elif sending_method == "POST":
+        try:
+            data = json.dumps(data)
+            print(data)
+            # resp = requests.post(url, headers=header, data=data, timeout=60)
+            # success = checking_status(resp.status_code, resp.text)
         except requests.exceptions.Timeout:
             logger.error("Waiting time exceeded in request post")
 

@@ -1,4 +1,5 @@
 import logging
+import requests
 
 
 def log_entry(name):
@@ -23,3 +24,12 @@ def checking_status(resp_status, resp_text):
         logger.error("Error: %s" % resp_text)
 
     return success
+
+
+# def handle_exceptions(func):
+#     def wrapper(*args, **kwargs):
+#         try:
+#             return func(*args, **kwargs)
+#         except FileNotFoundError:
+#             logger.error("Waiting time exceeded in request post fsdfsdfsfs")
+#     return wrapper()
