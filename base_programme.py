@@ -1,9 +1,7 @@
 from pathlib import Path
 from openpyxl.utils import exceptions
 from functions import *
-from itertools import islice
 
-import json
 import openpyxl
 import os
 import requests
@@ -45,7 +43,7 @@ class ParsData:
     # Путь к папке с резюме
     print(r"Example: C:\Users\folder")
     __path_in_file_resume = str(input("Enter the path to the resume folder: "))
-    print("#" * 100)
+    print("" * 100)
 
     def __init__(self):
         self.account_id = self.getting_account_id()
@@ -100,6 +98,15 @@ class ParsData:
 
         xlsx_file = Path(self.__path_in_file_db)
         data = []
+
+        print(
+            """
+                ############################
+                # Сбор данных о кандидатах #
+                ############################
+            """
+        )
+
         try:
             wb_obj = openpyxl.load_workbook(xlsx_file)
             sheet = wb_obj.active
@@ -110,6 +117,8 @@ class ParsData:
                 full_name = sheet[row][1].value
                 wages = sheet[row][2].value
                 comment = sheet[row][3].value
+
+                print("Сбор данных о %s..." % full_name.strip())
 
                 # Получение id статуса
                 status_text = sheet[row][4].value
@@ -149,7 +158,6 @@ class ParsData:
                     # id вакансии
                     "vacancies": vacancies.get(position_desire, None)
                 })
-                print("Сбор данных о %s..." % full_name.strip())
             wb_obj.close()
         except openpyxl.utils.exceptions.InvalidFileException:
             logger.error("Incorrect path or name of the db file")
