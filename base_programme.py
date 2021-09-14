@@ -18,40 +18,34 @@ logger = log_entry("base")
 """
 
 # Авторизационный токен
-# __token = input("Enter the user token: ")
-__token = ""
+print("Example: 01e89e8af0rwq06575b3w4ae808493jbb6386fe3085o4p23515cbc7b43505084482")
+token = input("Enter the user token: ")
 
 # Заголовк для отправки запросов
 header = {
     "User-Agent": "App/1.0 test@huntflow.ru",
-    "Authorization": "Bearer %s" % __token,
+    "Authorization": "Bearer %s" % token,
 }
 
 
 class ParsData:
     """
-        Получение и парсинг данных
+        Отправка и закрепление за вакансией кандидатотов, в сервисе huntflow, через api
     """
 
-    # todo: продумать куда записывать отправленых кандидатов, либо база или что-то подобное.
     print(__doc__)
 
     base_url = "https://dev-100-api.huntflow.dev"
 
-    # Путь к файлу
-    path_in_file = r"C:\Users\Coffee\Desktop\Тестовое задание\Менеджер по продажам\Корниенко Максим.doc"
-    # path_in_file = r"/home/alex/Загрузки/Тестовое задание/Менеджер по продажам/Корниенко Максим.doc"
-    # path_in_file = input("Enter the path to the file: ")
-
     # Путь к базе данных .xlsx
-    __path_in_file_db = r"C:\Users\Coffee\Desktop\Тестовое задание\Тестовая база.xlsx"
-    # __path_in_file_db = r"/home/alex/Загрузки/Тестовое задание/Тестовая база.xlsx"
+    print(r"Example: C:\Users\folder\database.xlsx")
+    __path_in_file_db = str(input("Enter the path to the database file: "))
+    print("#" * 100)
 
     # Путь к папке с резюме
-    __path_in_file_resume = r"C:\Users\Coffee\Desktop\Тестовое задание"
-    # __path_in_file_resume = r"/home/alex/Загрузки/Тестовое задание"
-
-    path_file = ''
+    print(r"Example: C:\Users\folder")
+    __path_in_file_resume = str(input("Enter the path to the resume folder: "))
+    print("#" * 100)
 
     def __init__(self):
         self.account_id = self.getting_account_id()
@@ -59,9 +53,6 @@ class ParsData:
         self.generated_data = self.getting_data()
 
     def handle(self):
-        # print(json.dumps(self.generated_data, indent=4, ensure_ascii=False))
-        # self.getting_data()
-        # self.getting_status_id()
         self.adding_candidate()
 
     def getting_account_id(self):
@@ -75,7 +66,7 @@ class ParsData:
         data = connect(url, sending_method='GET')
         available_org = []
         if data:
-            message = 'Необходимо ввести id организации. \n' \
+            message = 'You must enter the organization id. \n' \
                       'Доступные организации этому токену: \n '
             for key, value in data.items():
                 for organization in value:
@@ -128,50 +119,51 @@ class ParsData:
                         status = status_id
 
                 # Получение пути файла
-                path_file = self.getting_file_resume(full_name.strip())
+                path_file = self.getting_file_resume(full_name.strip()) or ""
 
                 # Парсинг данных
                 result_pars_file = self.sending_file(path_file)
                 fields_file = result_pars_file.get("fields", {})
-                phone = str(fields_file.get("phones", []))
-                name = fields_file.get("name", {})
-                birth_date = fields_file.get("birthdate", {})
-                position_now = fields_file.get("position", "")
 
                 # Получение id вакансий
                 vacancies = self.getting_vacancies()
-
                 data.append({
                     # Данные из файла excel
-                    "position_desire": position_desire, # Желаемая должность
-                    "full_name": full_name, # Полное имя
-                    "wages": wages, # Ожидаемая з/п
-                    "comment": comment, # Комментарий
-                    "status": status, # Статус
-                    "status_text": status_text, # Текст статуса
+                    "position_desire": position_desire,  # Желаемая должность
+                    "full_name": full_name,  # Полное имя
+                    "wages": wages,  # Ожидаемая з/п
+                    "comment": comment,  # Комментарий
+                    "status": status,  # Статус
+                    "status_text": status_text,  # Текст статуса
 
                     # Данные из парсинга резюме
-                    # FIXME: Добавить описание полей
-                    "id_resume_file": result_pars_file.get("id", {}),
-                    "name": name if name else {},
-                    "birth_date": birth_date if birth_date else {},
-                    "body": result_pars_file.get("text", ""),
-                    "phones": phone,
+                    "id_resume_file": result_pars_file.get("id", None),  # id загруженного файла
+                    "name": fields_file.get("name", {}) or {},
+                    "birth_date": fields_file.get("birthdate", {}) or {},
+                    "body": result_pars_file.get("text", ""),  # Полный текст резюме
+                    "phones": str(fields_file.get("phones", [])) or "",  # Список телефонов
                     "email": fields_file.get("email", ""),
-                    "position_now": position_now if position_now else "",
+                    "position_now": fields_file.get("position", ""),  # Кем работает
                     "photo_id": result_pars_file.get("photo", {}).get("id", None),
 
                     # id вакансии
-                    "vacancies": vacancies[position_desire]
+                    "vacancies": vacancies.get(position_desire, None)
                 })
+                print("Сбор данных о %s..." % full_name.strip())
             wb_obj.close()
         except openpyxl.utils.exceptions.InvalidFileException:
             logger.error("Incorrect path or name of the db file")
-        # print("Сбор данных о {candidate_name}")
+            raise SystemExit()
+
         # print(json.dumps(data, indent=4, ensure_ascii=False))
         return data
 
     def getting_status_id(self):
+
+        """
+            Получение id статуса
+        """
+
         url = "%s/account/%s/vacancy/statuses" % (self.base_url, self.account_id)
         status_data = {}
         resp = connect(url, sending_method="GET")
@@ -184,7 +176,6 @@ class ParsData:
             logger.error("No status code")
 
         return status_data
-
 
     def getting_file_resume(self, name_file):
 
@@ -212,6 +203,9 @@ class ParsData:
 
         """
             Возвращает данные после парсинга на сервесе huntflow через api
+
+            :param path_in_file - Путь к файлу
+            :return data_resume - Данные после парсинга документа
         """
 
         url = "%s/account/%s/upload" % (self.base_url, self.account_id)
@@ -221,6 +215,11 @@ class ParsData:
         return data_resume
 
     def getting_vacancies(self):
+
+        """
+            Получение списка вакансий
+        """
+
         url = '%s/account/%s/vacancies' % (self.base_url, self.account_id)
         all_vacancies = {}
 
@@ -232,7 +231,11 @@ class ParsData:
             if vac_name:
                 all_vacancies[vac_name] = vac_id
 
-        return all_vacancies
+        if all_vacancies:
+            return all_vacancies
+        else:
+            logger.error("There are no vacancies available")
+            raise SystemExit()
 
     def adding_candidate(self):
 
@@ -241,7 +244,16 @@ class ParsData:
         """
 
         url = "%s/account/%s/applicants" % (self.base_url, self.account_id)
-        for candidate_data in islice(self.generated_data, 1):
+
+        print(
+            """
+                #######################################
+                # Добавление кандидатов в базу данных #
+                #######################################
+            """
+        )
+
+        for candidate_data in self.generated_data:
             full_name = candidate_data.get("name", {})
             birth_date = candidate_data.get("birth_date", {})
             status_text = candidate_data.get("status_text", "")
@@ -262,13 +274,13 @@ class ParsData:
                 "externals": [
                     {
                         "data": {
-                            "body": candidate_data.get("body", "") or "", # Текст резюме
+                            "body": candidate_data.get("body", ""), # Текст резюме
                         },
                         # FIXME: Разобраться с этим значением
                         "auth_type": "NATIVE", # Тип резюме
                         "files": [
                             {
-                                "id": candidate_data.get("id_resume_file", None) or None # Идентификатор файла загруженного резюме
+                                "id": candidate_data.get("id_resume_file", None) # Идентификатор файла загруженного резюме
                             }
                         ],
                         # FIXME: Разобраться с этим значением
@@ -276,40 +288,32 @@ class ParsData:
                     }
                 ],
             }
-            # print(json.dumps(data, indent=4, ensure_ascii=False))
             resp = connect(url, data=data, sending_method="POST")
-            print("rest_adding_candidate", resp)
-            resp = {}
-            applicant_id = resp.get("id", None) or None
+
+            # id Кандидата
+            applicant_id = resp.get("id", None)
 
             securing_candidate = {
-                "vacancy": resp.get("id", None) or None,
-                "status": candidate_data.get('status', ""),
+                # FIXME: Подумать еще про вакансии если их нету
+                "vacancy": candidate_data.get("vacancies", None),
+                "status": candidate_data.get('status', None),
+                "comment": candidate_data.get("comment", ""),
                 "files": [
                     {
                         "id": candidate_data.get("id_resume_file", None)
                     }
                 ],
-                "fill_quota": "",
             }
-            if status_text:
-                if status_text == "Отказ":
-                    securing_candidate["rejection_reason"] = candidate_data.get("comment", "")
-                else:
-                    securing_candidate["comment"] = candidate_data.get("comment", "")
-
             self.adding_candidate_on_vacancy(securing_candidate, applicant_id)
+            print("Кандидат %s, отправлен" % candidate_data.get("full_name", "").strip())
 
     def adding_candidate_on_vacancy(self, securing_candidate, applicant_id):
         """
             Добавление кандидата на вакансию
         """
 
-        # url = "%s/account/%s/applicants/%s/vacancy" % (self.base_url, self.account_id, applicant_id)
-        url = "%s/account/%s/applicants/868/vacancy" % (self.base_url, self.account_id)
-        print(securing_candidate, applicant_id)
-        # resp = connect(url, data=securing_candidate, sending_method="POST")
-        # print("resp_adding_candidate_on_vacancy", resp)
+        url = "%s/account/%s/applicants/%s/vacancy" % (self.base_url, self.account_id, applicant_id)
+        resp = connect(url, data=securing_candidate, sending_method="POST")
 
 
 def connect(url, path_file=None, data=None, param=None, sending_method=None):
@@ -332,6 +336,7 @@ def connect(url, path_file=None, data=None, param=None, sending_method=None):
                 except requests.exceptions.Timeout:
                     logger.error("Waiting time exceeded in request post")
         except FileNotFoundError:
+            # FIXME: Не забыть изменить имя файла
             logger.error("There is no file to send or the file path is specified incorrectly. File: %s")
 
     elif sending_method == "GET":
@@ -351,8 +356,8 @@ def connect(url, path_file=None, data=None, param=None, sending_method=None):
     if success:
         data_resume = resp.json()
     else:
-        data_resume = {}
         logger.error("Empty response to requests")
+        raise SystemExit()
 
     return data_resume
 
