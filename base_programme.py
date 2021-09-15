@@ -52,7 +52,6 @@ class ParsData:
             Получение данных об организации
         """
 
-        # FIXME: Поменять все русское на англ
         url = "%s/accounts" % self.base_url
         data = connect(url, header=self.header, sending_method='GET')
         available_org = []
