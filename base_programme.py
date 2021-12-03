@@ -1,14 +1,14 @@
-from pathlib import Path
-from openpyxl.utils import exceptions
-from functions import *
-
 import openpyxl
 import os
 import requests
 
+from pathlib import Path
+from openpyxl.utils import exceptions
+
+from functions import log_entry, checking_status
+
 mb = 15 * 1048576
 
-# todo: продумать удаление данных, чтобы не скапливались
 logger = log_entry("base")
 
 
@@ -17,12 +17,11 @@ class ParsData:
         Отправка и закрепление за вакансией кандидатов, в сервисе huntflow, средствами api
     """
 
-    print(__doc__)
+    logger.info("Сбор данных и отправка кандидатов в сервис Huntflow")
 
     base_url = "https://dev-100-api.huntflow.dev"
 
     def __init__(self, user_token, file_db, file_resume):
-
         """
             :param str user_token: Пользовательский токен
             :param str file_db: Путь к файлу DB
@@ -39,15 +38,14 @@ class ParsData:
             "Authorization": "Bearer %s" % token,
             }
 
-        self.account_id = self.getting_account_id()
-        self.status_data = self.getting_status_id()
-        self.generated_data = self.getting_data()
+        self.account_id = self.get_account_id()
+        self.status_data = self.get_status_id()
+        self.generated_data = self.get_data()
 
     def handle(self):
         self.adding_candidate()
 
-    def getting_account_id(self):
-
+    def get_account_id(self):
         """
             Получение данных об организации
         """
@@ -56,8 +54,12 @@ class ParsData:
         data = connect(url, header=self.header, sending_method='GET')
         available_org = []
         if data:
-            message = 'You must enter the organization id. \n' \
-                      'Available organizations for this token: \n '
+            # message = 'You must enter the organization id. \n' \
+            #           'Available organizations for this token: \n '
+            message = """
+                You must enter the organization id. \n
+                Available organizations for this token: \n
+            """
             for key, value in data.items():
                 for organization in value:
                     organization = dict(organization)
@@ -65,13 +67,12 @@ class ParsData:
                     org_name = organization.get('name', '')
                     message += f'"{org_name}": {org_id} \n'
                     available_org.append(org_id)
-            print(message)
+            logger.info(message)
 
             while available_org:
                 try:
                     input_org_id = int(input("Enter the organization id: "))
                     if input_org_id in available_org:
-                        # self.account_id = input_org_id
                         return input_org_id
                     else:
                         print("There is no such organization in the list, please try again. \n")
@@ -82,8 +83,7 @@ class ParsData:
         else:
             raise SystemExit("No organizations available.")
 
-    def getting_data(self):
-
+    def get_data(self):
         """
             Формирование данных для отправки
         """
@@ -91,7 +91,7 @@ class ParsData:
         xlsx_file = Path(self.path_in_file_db)
         data = []
 
-        print(
+        logger.info(
             """
                 ####################################
                 # Collecting data about candidates #
@@ -120,7 +120,7 @@ class ParsData:
                         status = status_id
 
                 # Получение пути файла
-                path_file = self.getting_file_resume(full_name.strip()) or ""
+                path_file = self.get_file_resume(full_name.strip()) or ""
 
                 # Парсинг данных
                 result_pars_file = self.sending_file(path_file)
@@ -128,6 +128,7 @@ class ParsData:
                 phone = fields_file.get("phones", [])
 
                 # Получение id вакансий
+                # FIXME: получается, что каждый раз вытягивается из Api
                 vacancies = self.getting_vacancies()
                 data.append({
                     # Данные из файла excel
@@ -158,8 +159,7 @@ class ParsData:
 
         return data
 
-    def getting_status_id(self):
-
+    def get_status_id(self):
         """
             Получение id статуса
         """
@@ -169,16 +169,16 @@ class ParsData:
         resp = connect(url, header=self.header, sending_method="GET")
         for item, item_list in resp.items():
             for status_item_data in item_list:
-                if status_item_data.get("id", None):
-                    status_data[status_item_data.get("id", None)] = status_item_data.get("name", "")
+                id_ = status_item_data.get("id", None)
+                if id_:
+                    status_data[id_] = status_item_data.get("name", "")
 
         if not status_data:
             logger.error("No status code")
 
         return status_data
 
-    def getting_file_resume(self, name_file):
-
+    def get_file_resume(self, name_file):
         """
             Получение пути файла
             :param str name_file: Название файла
@@ -200,7 +200,6 @@ class ParsData:
         return self.path_file
 
     def sending_file(self, path_in_file):
-
         """
             Возвращает данные после парсинга на сервесе huntflow через api
 
@@ -215,7 +214,6 @@ class ParsData:
         return data_resume
 
     def getting_vacancies(self):
-
         """
             Получение списка вакансий
         """
@@ -238,14 +236,13 @@ class ParsData:
             raise SystemExit()
 
     def adding_candidate(self):
-
         """
             Добавление кандидата в базу
         """
-
+        # FIXME: Добавить обработку неотправленных заказов
         url = "%s/account/%s/applicants" % (self.base_url, self.account_id)
 
-        print(
+        logger.info(
             """
                 #####################################
                 # Adding candidates to the database #
@@ -314,8 +311,9 @@ class ParsData:
         resp = connect(url, data=securing_candidate, header=self.header, sending_method="POST")
 
 
+# FIXME: Разделить все методы на отдельные функции, возможно вынести в отдельный файл и просто импортировать,
+#  чтобы не нагружать скрипт
 def connect(url, path_file=None, header=None, data=None, param=None, sending_method=None):
-
     """
         Выполнение HTTP запросов, для получения и заполнения данных
         :param str url: Url запроса
@@ -325,6 +323,7 @@ def connect(url, path_file=None, header=None, data=None, param=None, sending_met
         :param dict param: Параметры запроса
         :param str sending_method: Метод передачи запроса
     """
+
     success = False
     resp = {}
     if sending_method == "FILE_POST":
