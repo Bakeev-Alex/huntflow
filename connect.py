@@ -7,7 +7,7 @@ logger = log_entry("connect")
 
 
 @success_func
-def pars_file_from_api(url, header, path_file):
+def pars_file_from_api(url: str, header: dict, path_file: str):
     """
     Отправка post запросом файла для парсинга
 
@@ -37,7 +37,7 @@ def pars_file_from_api(url, header, path_file):
 
 
 @success_func
-def request_api_get(url, header, param=None):
+def request_api_get(url: str, header: dict, param: dict = None):
     """
     Получение данных через get запрос
 
@@ -58,7 +58,7 @@ def request_api_get(url, header, param=None):
 
 
 @success_func
-def request_api_post(url, header, data):
+def request_api_post(url: str, header: dict, data: dict):
     """
     Отправка данных пост запросом
 

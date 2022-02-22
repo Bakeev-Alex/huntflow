@@ -12,10 +12,6 @@ mb = 15 * 1048576
 logger = log_entry("base")
 
 
-# FixMe: Прописать типизацию
-
-# FixMe: Посмотреть где можно убрать списки и заменить кортежами
-
 class ParsData:
     """
         Отправка и закрепление за вакансией кандидатов, в сервисе huntflow, средствами api
@@ -63,9 +59,9 @@ class ParsData:
             for key, value in data.items():
                 available_org = (id_.get('id') for id_ in value)
 
-            id_organization = next(iter(available_org), None)
-            if id_organization:
-                return id_organization
+            organization_id = next(available_org, None)
+            if organization_id:
+                return organization_id
             else:
                 raise SystemExit("Нет доступных организаций.")
         else:
@@ -96,7 +92,7 @@ class ParsData:
 
         return status_data
 
-    def get_path_file_resume(self, name_file):
+    def get_path_file_resume(self, name_file: str) -> str:
         """
         Поиск файла в папке по названиею.
 
@@ -154,7 +150,7 @@ class ParsData:
             logger.error("Свободных вакансий нет")
             raise SystemExit()
 
-    def parse_file(self, path_in_file):
+    def parse_file(self, path_in_file: str) -> dict:
         """
         Возвращает данные после парсинга.
 
@@ -238,23 +234,26 @@ class ParsData:
 
                 applicant_id = self.add_candidate(candidate_data)
 
-                securing_candidate = {
-                    "vacancy": self.vacancies.get(position_desire, None),
-                    "status": self.status_data.get(str(status_text)),
-                    "comment": comment,
-                    "files": [
-                        {
-                            "id": result_pars_file.get("id", None)
-                        }
-                    ],
-                }
+                if applicant_id:
+                    securing_candidate = {
+                        "vacancy": self.vacancies.get(position_desire, None),
+                        "status": self.status_data.get(str(status_text)),
+                        "comment": comment,
+                        "files": [
+                            {
+                                "id": result_pars_file.get("id", None)
+                            }
+                        ],
+                    }
 
-                candidate_on_vacancy = self.add_candidate_on_vacancy(securing_candidate, applicant_id)
+                    candidate_on_vacancy = self.add_candidate_on_vacancy(securing_candidate, applicant_id)
 
-                if candidate_on_vacancy:
-                    print(f"Кандидат {full_name}, добавлен.")
+                    if candidate_on_vacancy:
+                        print(f"Кандидат {full_name}, добавлен на вакансию.")
+                    else:
+                        logger.error(f'Запись кандидата на вакансию {full_name} не удалась.')
                 else:
-                    logger.error(f'Запись кандидата на вакансию {full_name} не удалась.')
+                    logger.error(f'Записать кандидата {full_name} в базу данных не удалась.')
 
             wb_obj.close()
 
@@ -262,7 +261,7 @@ class ParsData:
             logger.error("Неверный путь или имя файла базы данных.")
             raise SystemExit()
 
-    def add_candidate(self, candidate_data):
+    def add_candidate(self, candidate_data: dict) -> int:
         """
         Отправляет данные кандидата в базу.
 
@@ -272,7 +271,7 @@ class ParsData:
         Return:
             candidate_id int: id кандидата в базе.
         """
-        # FIXME: Добавить обработку неотправленных заказов
+
         url = f"{self.base_url}/account/{self.organization_id}/applicants"
 
         resp = request_api_post(url, header=self.header, data=candidate_data)
@@ -281,7 +280,7 @@ class ParsData:
 
         return candidate_id
 
-    def add_candidate_on_vacancy(self, securing_candidate, applicant_id):
+    def add_candidate_on_vacancy(self, securing_candidate: dict, applicant_id: int) -> int:
         """
         Добавление кандидата на вакансию.
 
@@ -303,25 +302,18 @@ class ParsData:
 
 if __name__ == '__main__':
     # Авторизационный токен
-    # print("Example: 01e89e8af0rwq06575b3w4ae808493jbb6386fe3085o4p23515cbc7b43505084482")
-    # print("Example: 71e89e8af02206575b3b4ae80bf35b6386fe3085af3d4085cbc7b43505084482")
-    # token = input("Enter the user token: ")
-    # print(("#" * 50) + "\n")
-
+    print("Example: 01e89e8af0rwq06575b3w4ae808493jbb6386fe3085o4p23515cbc7b43505084")
+    token = input("Enter the user token: ")
+    print(("#" * 50) + "\n")
     # Путь к базе данных .xlsx
-    # print(r"Example: C:\Users\folder\database.xlsx")
-    # print(r"Example: C:\project\huntflow\files\db_test.xlsx")
-    # path_in_file_db = str(input("Enter the path to the database file: "))
-    # print(("#" * 50) + "\n")
-    #
-    # # Путь к папке с резюме
-    # print(r"Example: C:\Users\folder")
-    # path_in_file_resume = str(input("Enter the path to the resume folder: "))
-    # print(("#" * 50) + "\n")
+    print(r"Example: C:\Users\folder\database.xlsx")
+    path_in_file_db = str(input("Enter the path to the database file: "))
+    print(("#" * 50) + "\n")
 
-    token = '71e89e8af02206575b3b4ae80bf35b6386fe3085af3d4085cbc7b43505084482'
-    path_in_file_resume = r'C:\project\huntflow\files'
-    path_in_file_db = r'C:\project\huntflow\files\db_test.xlsx'
+    # Путь к папке с резюме
+    print(r"Example: C:\Users\folder")
+    path_in_file_resume = str(input("Enter the path to the resume folder: "))
+    print(("#" * 50) + "\n")
 
     instance = ParsData(user_token=token,
                         file_db=path_in_file_db,

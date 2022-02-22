@@ -8,20 +8,19 @@ def log_entry(name):
     Настройки логирования
     """
 
-    logger_base = logging.getLogger(name)
-    logging.basicConfig(filename="logs/errors_file.txt",
-                        filemode='a',
+    root_logger = logging.getLogger(name)
+    logging.basicConfig(handlers=[logging.FileHandler('logs/errors_file.txt', 'w', 'utf-8')],
                         format='%(asctime)s - %(message)s',
                         datefmt='%d-%m-%y %H:%M:%S')
     console = logging.StreamHandler(stream=sys.stdout)
-    logger_base.addHandler(console)
-    return logger_base
+    root_logger.addHandler(console)
+    return root_logger
 
 
 logger = log_entry("functions")
 
 
-def checking_status(resp):
+def checking_status(resp) -> bool:
     """
     Проверка статуса
 
